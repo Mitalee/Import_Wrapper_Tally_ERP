@@ -76,7 +76,7 @@ class TallyImporter:
 			</BODY>
 		</ENVELOPE>\n"""
 
-		print(xml_op)
+		#print(xml_op)
 		return(xml_op)
 		
 
@@ -85,23 +85,31 @@ class TallyImporter:
 
 		try:
 			response = requests.post(url,data=xml_row, headers=headers)
-		except requetss.exceptions.RequestException as e: #Catch all exceptions
+		except requests.exceptions.RequestException as e: #Catch all exceptions
 			return(e)
+
+		#print('RESPONSE TEXT IS: \n',response.text)
 
 		if response.status_code == 200:
 			tree = ET.fromstring(response.content)
 			if tree.find("./BODY/DATA/ERRORS").text != '1':
 				if tree.find("./BODY/DATA/CREATED") == '1':
+					# successful creation of sales voucher
 					return('Created. Voucher ID is:'+ tree.find("./BODY/DATA/LASTVCHID").text +\
 					 'and' + tree.find(tree.find("./BODY/DATA/DESC/CMPINFOEX/IDINFO/LASTCREATEDVCHID").text))
 				else:
+					#no error as sent by Tally Response message, yet no Last Voucher ID!
 					return('Created Voucher ID not found. No Error.')
 			else:
-				if tree.find("./BODY/DATA/ERRORS") == None:
-					return('Error inserting record.')
+				# No LINEERROR XML tag
+				if tree.find("./BODY/DATA/LINEERROR") == None:
+					return('Unknown error inserting record.')
+				
 				else:
-					return(tree.find("./BODY/DATA/ERRORS").text)
+					# return LINEERROR XML tag text
+					return('Error inserting record' + tree.find("./BODY/DATA/LINEERROR").text)
 		else:
+			# return Tally Response status code
 			return('server error: ', response.status_code)
 
 	def batch_import(self):
