@@ -15,6 +15,10 @@ Index([ 'invoice_number', 'invoice_date','sku', 'invoice_amount','total_tax_amou
       dtype='object')
 >>> row = t.df.iloc[0]
 >>> t.send_tally_request(row)
+>>> o = t.batch_import()
+>>> type(o)
+<class 'pandas.core.series.Series'>
+>>> o
 ```
 
 
