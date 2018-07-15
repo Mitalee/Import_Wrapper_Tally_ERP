@@ -17,7 +17,8 @@ class TallyImporter:
 	#replaced spaces with underscores and lowercase of all column names
 	def clean_columns(self):
 		self.df.columns = [c.lower().replace(' ', '_').replace('/','_') for c in self.df.columns]
-		self.df['invoice_date'] = pd.to_datetime(self.df['invoice_date']).dt.strftime('%Y%m%d')
+		#keep only date and strip time from invoice date
+		self.df['invoice_date'] = self.df['invoice_date'].str[:-6]
 		print(self.df.columns)
 
 	def create_xml(self, row):
@@ -39,30 +40,23 @@ class TallyImporter:
 
 		#Voucher Specifics excluding GST details
 		xml_op += f"""<TALLYMESSAGE>
-				<VOUCHER VCHTYPE='Sales' ACTION='Create'>
+				<VOUCHER VCHTYPE='Sales' ACTION='Create' OBJVIEW='Invoice Voucher View'>
 					<DATE>{row.invoice_date}</DATE> 
 					<NARRATION> Amazon Order ID: {row.order_id}</NARRATION>
-					<VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+					<VOUCHERTYPENAME>Sales_amazon</VOUCHERTYPENAME>
 					<VOUCHERNUMBER>{row.invoice_number}</VOUCHERNUMBER>
+					<PERSISTEDVIEW>Invoice Voucher View</PERSISTEDVIEW>
 					<ISINVOICE>Yes</ISINVOICE>
 					<LEDGERENTRIES.LIST>
 						<ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
 						<LEDGERNAME>Amazon IN OMS</LEDGERNAME>
 						<AMOUNT>-{row.invoice_amount}</AMOUNT>
 					</LEDGERENTRIES.LIST>
-					<ALLINVENTORYENTRIES.LIST> 
+					<LEDGERENTRIES.LIST> 
 						<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE> 
-						<STOCKITEMNAME>{row.sku}</STOCKITEMNAME> 
+						<LEDGERNAME>Sales Account</LEDGERNAME> 
 						<AMOUNT>{row.tax_exclusive_gross}</AMOUNT> 
-						<ACTUALQTY>{row.quantity}</ACTUALQTY> 
-						<BILLEDQTY>{row.quantity}</BILLEDQTY> 
-						<RATE>{row.tax_exclusive_gross}</RATE> 
-						<ACCOUNTINGALLOCATIONS.LIST> 
-							<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE> 
-							<LEDGERNAME>Sales</LEDGERNAME> 
-							<AMOUNT>{row.tax_exclusive_gross}</AMOUNT> 
-						</ACCOUNTINGALLOCATIONS.LIST>
-					</ALLINVENTORYENTRIES.LIST>"""
+					</LEDGERENTRIES.LIST>"""
 
 		#end xml
 		if row.ship_from_state.lower() == row.ship_to_state.lower():
@@ -70,30 +64,31 @@ class TallyImporter:
 			#xml_sgst_rate = int(row.sgst_rate*100)
 			xml_op += f"""\n<LEDGERENTRIES.LIST> 
 						<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE> 
-						<LEDGERNAME>CGST @{int(row.cgst_rate*100)}%</LEDGERNAME> 
+						<LEDGERNAME>CGST</LEDGERNAME> 
 						<AMOUNT>{row.cgst_tax}</AMOUNT> 
 					</LEDGERENTRIES.LIST> 
 					<LEDGERENTRIES.LIST> 
 						<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE> 
-						<LEDGERNAME>SGST @{int(row.sgst_rate*100)}%</LEDGERNAME> 
+						<LEDGERNAME>SGST</LEDGERNAME> 
 						<AMOUNT>{row.sgst_tax}</AMOUNT> 
 					</LEDGERENTRIES.LIST>"""
 		else:
 			#xml_igst_rate = int(row.igst_rate*100)
 			xml_op += f"""\n<LEDGERENTRIES.LIST> 
 						<ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE> 
-						<LEDGERNAME>IGST @{int(row.igst_rate*100)}%</LEDGERNAME> 
+						<LEDGERNAME>IGST</LEDGERNAME> 
 						<AMOUNT>{row.igst_tax}</AMOUNT> 
 					</LEDGERENTRIES.LIST>""" 
 
 					
 		#end xml
 		xml_op += """</VOUCHER>
+					</TALLYMESSAGE>
 					</DATA>
 					</BODY>
 				</ENVELOPE>\n"""
 
-		print(xml_op)
+		#print(xml_op)
 		return(xml_op)
 		
 
@@ -108,26 +103,27 @@ class TallyImporter:
 		#print('RESPONSE TEXT IS: \n',response.text)
 
 		if response.status_code == 200:
+			#print(response.content)
 			tree = ET.fromstring(response.content)
-			#TODO - Handle only <RESPONSE> tag from voucher sohel_igst_vchr.xml
-			if tree.find("./BODY/DATA/ERRORS").text != '1':
-				if tree.find("./BODY/DATA/CREATED") == '1':
-					# successful creation of sales voucher
-					return('Created. Voucher ID is:'+ tree.find("./BODY/DATA/LASTVCHID").text +\
-					 'and' + tree.find(tree.find("./BODY/DATA/DESC/CMPINFOEX/IDINFO/LASTCREATEDVCHID").text))
-				else:
-					#no error as sent by Tally Response message, yet no Last Voucher ID!
-					return('Created Voucher ID not found. No Error.')
-			else:
-				# No LINEERROR XML tag
-				if tree.find("./BODY/DATA/LINEERROR") == None:
-					return('Unknown error inserting record.')
-				
-				else:
-					# return LINEERROR XML tag text
-					return('Error inserting record' + tree.find("./BODY/DATA/LINEERROR").text)
+			if tree.tag != 'ENVELOPE':
+				if tree.tag == 'RESPONSE':
+					return('Tally Response: ' + tree.text)
+			else: #Response has 'ENVELOPE'
+				if tree.find("./BODY/DATA/LINEERROR") is None:
+					if tree.find("./BODY/DATA/IMPORTRESULT/CREATED").text == '1':
+						# successful creation of sales voucher
+						return('Amazon Invoice:' + tree.find("./BODY/DATA/IMPORTRESULT/VCHNUMBER").text +\
+						 ' - Tally Voucher ID:'+ tree.find("./BODY/DATA/IMPORTRESULT/LASTVCHID").text)
+
+					else: #Created is 0 but no LINEERROR
+						#TODO - what if created is 0 and no LINEERROR?
+						return('Created tag not equal to 1, yet no LINEERROR. DEBUG code.')
+				else:  
+					# LINEERROR IS PRESENT. Return the text.
+					return('Amazon Invoice: ' + csv_row.invoice_number + '- LineError: ' + tree.find("./BODY/DATA/LINEERROR").text)
 		else:
 			# return Tally Response status code
+			print('server error')
 			return('server error: ', response.status_code)
 
 	def batch_import(self):
