@@ -5,6 +5,8 @@ A simple python wrapper utilizing the power of Pandas to import sales vouchers f
 ```python
 
 >>> from csv_to_tally import TallyImporter
+>>> from importlib import reload
+>>> reloac(csv_to_tally)
 >>> f = 'test.csv'
 >>> t = TallyImporter(filename=f)
 loaded file into a dataframe "df".
