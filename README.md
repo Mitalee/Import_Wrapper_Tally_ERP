@@ -21,6 +21,7 @@ Index([ 'invoice_number', 'invoice_date','sku', 'invoice_amount','total_tax_amou
 >>> type(o)
 <class 'pandas.core.series.Series'>
 >>> o
+>>>o.to_csv('tally_log.txt', sep='\t', index=False)
 ```
 
 
