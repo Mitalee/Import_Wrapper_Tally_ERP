@@ -1,6 +1,8 @@
 # Import_Wrapper_Tally_ERP
 A simple python wrapper utilizing the power of Pandas to import sales vouchers from CSV files into Tally ERP 9.
 
+I made this wrapper while helping a former classmate build a small product around his ecommerce sales, to push all his sales invoices into Tally. works perfectly on the python CLI. Currently developing the front end for the same (folks interested in ReactJS are welcome to contribute!).
+
 
 ```python
 
