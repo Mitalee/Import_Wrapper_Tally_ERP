@@ -60,8 +60,8 @@ class TallyImporter:
 		self.df['invoice_date'] = self.df['invoice_date'].dt.strftime('%d-%m-%Y')
 		#Ignore Cancel and Refund rows
 		self.df=self.df[self.df.transaction_type == 'Shipment']
-		#print(self.df.columns)
-		#print(self.df.head(3))
+		print(self.df.columns)
+		print(self.df.head(3))
 
 	def create_voucher_xml(self, row):
 
